@@ -1,5 +1,5 @@
 venv/
-data/
+data/credit_card_transactions.csv
 studies/
 __pycache__/
 *.pyc
