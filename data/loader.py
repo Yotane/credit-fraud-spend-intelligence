@@ -1,7 +1,7 @@
 import pandas as pd
 from pathlib import Path
 
-DATA_PATH = Path(__file__).resolve().parents[2] / "data" / "credit_card_transactions.csv"
+DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "credit_card_transactions.csv"
 
 DROP_COLS = ["Unnamed: 0", "first", "last", "street", "trans_num", "cc_num"]
 
