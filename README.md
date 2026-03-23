@@ -1,0 +1,2 @@
+# Credit Fraud & Spend Intelligence
+**End-to-end machine learning project analyzing transaction behavior to model spending patterns and detect fraud, with feature engineering, Optuna optimization, and SHAP-based interpretability.**
