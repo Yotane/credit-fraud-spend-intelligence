@@ -114,6 +114,26 @@ def plot_fraud_vs_legit_spend(df):
     plt.savefig("plots/fraud_vs_legit_spend.png", dpi=150)
     plt.close()
 
+def plot_fraud_spend_only(df):
+    fraud = df[df["is_fraud"] == 1]["amt"]
+    
+    fig, axes = plt.subplots(1, 2, figsize=(14, 5))
+    
+    axes[0].hist(fraud, bins=100, color="tomato", edgecolor="none")
+    axes[0].set_title("Fraud Spend Distribution (full range)")
+    axes[0].set_xlabel("Amount ($)")
+    
+    # cap at 500 to see the bulk of fraud transactions
+    axes[1].hist(fraud[fraud < 500], bins=100, color="tomato", edgecolor="none")
+    axes[1].set_title("Fraud Spend Distribution (under $500)")
+    axes[1].set_xlabel("Amount ($)")
+    
+    plt.tight_layout()
+    plt.savefig("plots/fraud_spend_only.png", dpi=150)
+    plt.close()
+    
+    print(f"\nFraud spend stats:")
+    print(fraud.describe().round(2))
 
 def print_summary(df):
     print(f"Total transactions: {len(df):,}")
@@ -139,5 +159,7 @@ if __name__ == "__main__":
     plot_fraud_by_category(df)
     plot_spend_by_hour(df)
     plot_fraud_vs_legit_spend(df)
+    plot_fraud_spend_only(df)
+
 
     print("Done. Plots saved to plots/")
