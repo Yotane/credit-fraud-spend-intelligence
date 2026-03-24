@@ -8,7 +8,8 @@ from pathlib import Path
 
 FEATURES = [
     "age", "distance_km", "hour", "day_of_week", "month", "is_weekend",
-    "city_pop", "gender", "category", "job", "age_group", "city_size"
+    "city_pop", "gender", "category", "job", "age_group", "city_size",
+    "prophet_residual"
 ]
 
 TARGET = "amt"
