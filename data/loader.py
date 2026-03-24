@@ -3,7 +3,7 @@ from pathlib import Path
 
 DATA_PATH = Path(__file__).resolve().parents[1] / "data" / "credit_card_transactions.csv"
 
-DROP_COLS = ["Unnamed: 0", "first", "last", "street", "trans_num", "cc_num"]
+DROP_COLS = ["Unnamed: 0", "first", "last", "street", "trans_num"]
 
 def load_transactions(path: Path = DATA_PATH) -> pd.DataFrame:
     df = pd.read_csv(path)

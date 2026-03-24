@@ -2,22 +2,22 @@ import lightgbm as lgb
 import pandas as pd
 import numpy as np
 from sklearn.model_selection import train_test_split
-from sklearn.metrics import mean_squared_error, mean_absolute_error
+from sklearn.metrics import f1_score, classification_report
 from sklearn.preprocessing import LabelEncoder
 import joblib
 from pathlib import Path
 
 FEATURES = [
     "age", "distance_km", "hour", "day_of_week", "month", "is_weekend",
-    "city_pop", "gender", "category", "job", "age_group", "city_size",
+    "city_pop", "gender", "category", "job", "age_group", "city_size", 
     "prophet_residual"
 ]
 
-TARGET = "amt"
+TARGET = "is_fraud"
 
 PARAMS = {
-    "objective": "regression",
-    "metric": "rmse",
+    "objective": "binary",
+    "metric": "binary_logloss",
     "verbosity": -1,
     "n_estimators": 1000,
     "learning_rate": 0.05,
@@ -31,7 +31,6 @@ PARAMS = {
 def prepare_data(df: pd.DataFrame):
     df = df.copy()
 
-    # label encode categoricals since LightGBM needs numeric input
     cat_cols = ["gender", "category", "job", "age_group", "city_size"]
     encoders = {}
     for col in cat_cols:
@@ -46,10 +45,17 @@ def prepare_data(df: pd.DataFrame):
 
 def train(df: pd.DataFrame, params: dict = None) -> tuple:
     X, y, encoders = prepare_data(df)
-    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=1)
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=0.2, random_state=1, stratify=y
+    )
+
+    # weight fraud cases to compensate for imbalance
+    n_legit = (y_train == 0).sum()
+    n_fraud = (y_train == 1).sum()
+    scale = n_legit / n_fraud
 
     p = params if params else PARAMS
-    model = lgb.LGBMRegressor(**p)
+    model = lgb.LGBMClassifier(**p, scale_pos_weight=scale)
     model.fit(
         X_train, y_train,
         eval_set=[(X_val, y_val)],
@@ -57,14 +63,14 @@ def train(df: pd.DataFrame, params: dict = None) -> tuple:
     )
 
     preds = model.predict(X_val)
-    rmse = mean_squared_error(y_val, preds) ** 0.5
-    mae = mean_absolute_error(y_val, preds)
+    f1 = f1_score(y_val, preds)
 
-    print(f"LightGBM Spend -- RMSE: {rmse:.4f}  MAE: {mae:.4f}")
-    return model, encoders, {"rmse": rmse, "mae": mae}
+    print(f"LightGBM Fraud -- F1: {f1:.4f}")
+    print(classification_report(y_val, preds, target_names=["Legitimate", "Fraud"]))
+    return model, encoders, {"f1": f1}
 
 
-def save(model, path: str = "models/lgbm_spend.pkl"):
+def save(model, path: str = "models/lgbm_fraud.pkl"):
     Path(path).parent.mkdir(exist_ok=True)
     joblib.dump(model, path)
 
@@ -77,4 +83,4 @@ if __name__ == "__main__":
     df = add_features(df)
     model, encoders, metrics = train(df)
     save(model)
-    print(f"Model saved.")
+    print("Model saved.")

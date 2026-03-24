@@ -1,5 +1,6 @@
 import pandas as pd
 import numpy as np
+from features.prophet_residual import compute_prophet_residuals
 
 def add_features(df: pd.DataFrame) -> pd.DataFrame:
     # work on a copy so the original dataframe is never mutated
@@ -31,6 +32,8 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
         bins=[0, 10000, 100000, float("inf")],
         labels=["rural", "suburban", "urban"]
     )
+
+    df = compute_prophet_residuals(df, verbose=True)
 
     return df
 
