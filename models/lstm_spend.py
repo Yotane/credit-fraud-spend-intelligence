@@ -3,6 +3,7 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 import joblib
 from pathlib import Path
@@ -55,6 +56,7 @@ class LSTMModel(nn.Module):
 
 
 def prepare_data(df: pd.DataFrame):
+
     df = df.copy()
     
     cat_cols = ["gender", "category", "job", "age_group", "city_size"]
@@ -64,15 +66,12 @@ def prepare_data(df: pd.DataFrame):
         df[col] = le.fit_transform(df[col].astype(str))
         encoders[col] = le
     
-    scaler = StandardScaler()
-    df[FEATURES] = scaler.fit_transform(df[FEATURES])
-    
     sequences, targets = _create_sequences(df, SEQUENCE_LENGTH)
     
-    return sequences, targets, encoders, scaler
+    return sequences, targets, encoders
 
 
-def _create_sequences(df: pd.DataFrame, seq_length: int):
+def _create_sequences(df, seq_length):
     sequences = []
     targets = []
     
@@ -96,12 +95,30 @@ def _create_sequences(df: pd.DataFrame, seq_length: int):
 
 
 def train(df: pd.DataFrame, params: dict = None) -> tuple:
-    sequences, targets, encoders, scaler = prepare_data(df)
+    df = df.copy()
     
+    cat_cols = ["gender", "category", "job", "age_group", "city_size"]
+    encoders = {}
+    for col in cat_cols:
+        le = LabelEncoder()
+        df[col] = le.fit_transform(df[col].astype(str))
+        encoders[col] = le
+
+    sequences, targets = _create_sequences(df, SEQUENCE_LENGTH)
+
     split_idx = int(len(sequences) * 0.8)
     train_seq, val_seq = sequences[:split_idx], sequences[split_idx:]
     train_tgt, val_tgt = targets[:split_idx], targets[split_idx:]
     
+    scaler = StandardScaler()
+    
+    train_seq_flat = train_seq.reshape(-1, len(FEATURES))
+    val_seq_flat = val_seq.reshape(-1, len(FEATURES))
+    train_seq_flat = scaler.fit_transform(train_seq_flat)
+    val_seq_flat = scaler.transform(val_seq_flat)
+    
+    train_seq = train_seq_flat.reshape(train_seq.shape)
+    val_seq = val_seq_flat.reshape(val_seq.shape)
     train_dataset = TransactionDataset(train_seq, train_tgt)
     val_dataset = TransactionDataset(val_seq, val_tgt)
     
@@ -122,6 +139,8 @@ def train(df: pd.DataFrame, params: dict = None) -> tuple:
     optimizer = torch.optim.Adam(model.parameters(), lr=lr)
     
     best_val_loss = float("inf")
+    best_model_state = None
+    
     for epoch in range(epochs):
         model.train()
         train_loss = 0
@@ -146,12 +165,19 @@ def train(df: pd.DataFrame, params: dict = None) -> tuple:
         
         if val_loss < best_val_loss:
             best_val_loss = val_loss
+            best_model_state = model.state_dict().copy()
         
         if (epoch + 1) % 10 == 0:
             print(f"Epoch {epoch+1}/{epochs} -- Train Loss: {train_loss:.4f}, Val Loss: {val_loss:.4f}")
     
+    if best_model_state is not None:
+        model.load_state_dict(best_model_state)
+    
     rmse = np.sqrt(best_val_loss)
-    mae = np.mean(np.abs(model(torch.FloatTensor(val_seq)).detach().numpy() - val_tgt))
+    model.eval()
+    with torch.no_grad():
+        preds = model(torch.FloatTensor(val_seq)).detach().numpy()
+    mae = np.mean(np.abs(preds - val_tgt))
     
     print(f"LSTM Spend -- RMSE: {rmse:.4f}  MAE: {mae:.4f}")
     return model, encoders, scaler, {"rmse": rmse, "mae": mae}
