@@ -3,10 +3,8 @@ import numpy as np
 from features.prophet_residual import compute_prophet_residuals
 
 def add_features(df: pd.DataFrame) -> pd.DataFrame:
-    # work on a copy so the original dataframe is never mutated
     df = df.copy()
 
-    # age in full years at the time of the transaction
     df["age"] = (
         (df["trans_date_trans_time"] - pd.to_datetime(df["dob"])).dt.days / 365.25
     ).astype(int)
@@ -20,7 +18,6 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
     df["month"] = df["trans_date_trans_time"].dt.month
     df["is_weekend"] = (df["day_of_week"] >= 5).astype(int)
 
-    # pd.cut buckets continuous values into labeled bins
     df["age_group"] = pd.cut(
         df["age"],
         bins=[0, 29, 39, 49, 59, 100],
@@ -39,10 +36,9 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
 
 
 def _haversine(lat1, lon1, lat2, lon2):
-    R = 6371  # earth radius in km
+    R = 6371
     lat1, lon1, lat2, lon2 = map(np.radians, [lat1, lon1, lat2, lon2])
     dlat = lat2 - lat1
     dlon = lon2 - lon1
-    # standard haversine formula
     a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
     return R * 2 * np.arcsin(np.sqrt(a))

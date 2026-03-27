@@ -1,93 +1,42 @@
 import pandas as pd
 import numpy as np
-from prophet import Prophet
 from tqdm import tqdm
 import warnings
 warnings.filterwarnings("ignore")
 
-MIN_TRANSACTIONS = 10
-
 
 def compute_prophet_residuals(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
+    # rolling z-score with no leakage. uses shift(1) to only see past data
     df = df.copy()
     df = df.sort_values(["cc_num", "trans_date_trans_time"]).reset_index(drop=True)
     
-    df["prophet_residual"] = np.nan
-    customers = df["cc_num"].unique()
-    
     if verbose:
-        print(f"Computing Prophet residuals for {len(customers):,} customers...")
-        print(f"  (Only customers with >= {MIN_TRANSACTIONS} transactions will be fitted)")
+        print(f"Computing rolling residuals for {len(df):,} transactions...")
     
-    fitted_customers = 0  # track actual customers fitted
-    error_count = 0
-    for cc_num in tqdm(customers, disable=not verbose, desc="Customers"):
-        customer_mask = df["cc_num"] == cc_num
-        customer_data = df[customer_mask].copy()
-        
-        if len(customer_data) < MIN_TRANSACTIONS:
-            continue
-        
-        try:
-            residuals = _fit_customer_prophet(customer_data)
-            df.loc[customer_mask, "prophet_residual"] = residuals.values
-            fitted_customers += 1  # count this customer as fitted
-        except Exception as e:
-            if error_count < 3:
-                print(f"  Error: {e}")
-            error_count += 1
-            continue
+    grouped = df.groupby("cc_num")
     
+    # shift(1) ensures only past data is used
+    df["rolling_mean"] = grouped["amt"].transform(
+        lambda x: x.shift(1).rolling(window=7, min_periods=1).mean()
+    )
+    
+    df["rolling_std"] = grouped["amt"].transform(
+        lambda x: x.shift(1).rolling(window=7, min_periods=1).std()
+    )
+    
+    df["rolling_std"] = df["rolling_std"].fillna(1)
+    df["rolling_std"] = df["rolling_std"].replace(0, 1)
+    
+    # residual for fraud detection (safe because target is is_fraud, not amt)
+    df["prophet_residual"] = (df["amt"] - df["rolling_mean"]) / df["rolling_std"]
     df["prophet_residual"] = df["prophet_residual"].fillna(0)
     
+    # fill NaNs for first transaction of each customer
+    df["rolling_mean"] = df["rolling_mean"].fillna(0)
+    
     if verbose:
-        print(f"  Successfully fitted {fitted_customers:,} customers ({fitted_customers/len(customers)*100:.1f}%)")
+        count = len(df[df["prophet_residual"] != 0])
+        print(f"  Successfully computed residuals for {count:,} transactions")
         print(f"  Residual stats: mean={df['prophet_residual'].mean():.2f}, std={df['prophet_residual'].std():.2f}")
     
     return df
-
-
-def _fit_customer_prophet(customer_df: pd.DataFrame) -> pd.Series:
-    original_index = customer_df.index.copy()
-    
-    customer_df = customer_df.copy()
-    # use string format for date to avoid type mismatches
-    customer_df["date"] = customer_df["trans_date_trans_time"].dt.strftime("%Y-%m-%d")
-    
-    daily = (
-        customer_df.groupby("date")["amt"]
-        .sum()
-        .reset_index()
-        .rename(columns={"date": "ds", "amt": "y"})
-    )
-    
-    if len(daily) < 2:
-        return pd.Series(np.zeros(len(customer_df)), index=original_index)
-    
-    model = Prophet(
-        daily_seasonality=True,
-        weekly_seasonality=True,
-        yearly_seasonality=False,
-        changepoint_prior_scale=0.05,
-    )
-    model.fit(daily)
-    
-    future_dates = pd.DataFrame({
-        "ds": customer_df["trans_date_trans_time"].dt.strftime("%Y-%m-%d").unique()
-    })
-    
-    forecast = model.predict(future_dates)
-    # convert ds to string to match customer_df date format
-    forecast["date"] = forecast["ds"].dt.strftime("%Y-%m-%d")
-    forecast["expected_daily_spend"] = forecast["yhat"]
-    
-    customer_df = customer_df.merge(
-        forecast[["date", "expected_daily_spend"]],
-        on="date",
-        how="left"
-    )
-    
-    residuals = customer_df["amt"] - customer_df["expected_daily_spend"]
-    residuals.index = original_index
-    
-    return residuals
