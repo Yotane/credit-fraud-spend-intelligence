@@ -4,26 +4,27 @@ import torch.nn as nn
 from torch.utils.data import Dataset, DataLoader
 import pandas as pd
 import numpy as np
+from sklearn.model_selection import train_test_split
 from sklearn.preprocessing import LabelEncoder, StandardScaler
 from pathlib import Path
 
 SEQUENCE_LENGTH = 5
 BATCH_SIZE = 256
-EPOCHS = 20  # reduced from 50 for faster trials
-BASE_LEARNING_RATE = 0.001
+EPOCHS = 20
 
+# Use rolling_mean and rolling_std instead of prophet_residual to avoid target leakage
 FEATURES = [
     "age", "distance_km", "hour", "day_of_week", "month", "is_weekend",
     "city_pop", "gender", "category", "job", "age_group", "city_size",
-    "prophet_residual"
+    "rolling_mean", "rolling_std"
 ]
 
 TARGET = "amt"
 
 STUDY_NAME = "lstm_spend_tpe"
 STORAGE = "sqlite:///studies/lstm_spend_tpe.db"
-N_TRIALS = 10  # reduced from 30 for faster completion
-TIMEOUT = 14400  # 4 hours max
+N_TRIALS = 10
+TIMEOUT = 14400
 
 
 class TransactionDataset(Dataset):
@@ -56,24 +57,6 @@ class LSTMModel(nn.Module):
         return out.squeeze()
 
 
-def prepare_data(df):
-    df = df.copy()
-    
-    cat_cols = ["gender", "category", "job", "age_group", "city_size"]
-    encoders = {}
-    for col in cat_cols:
-        le = LabelEncoder()
-        df[col] = le.fit_transform(df[col].astype(str))
-        encoders[col] = le
-    
-    scaler = StandardScaler()
-    df[FEATURES] = scaler.fit_transform(df[FEATURES])
-    
-    sequences, targets = _create_sequences(df, SEQUENCE_LENGTH)
-    
-    return sequences, targets, encoders, scaler
-
-
 def _create_sequences(df, seq_length):
     sequences = []
     targets = []
@@ -97,13 +80,53 @@ def _create_sequences(df, seq_length):
     return np.array(sequences), np.array(targets)
 
 
-def train_and_evaluate(trial, sequences, targets):
-    split_idx = int(len(sequences) * 0.8)
-    train_seq, val_seq = sequences[:split_idx], sequences[split_idx:]
-    train_tgt, val_tgt = targets[:split_idx], targets[split_idx:]
+def prepare_data(df):
+    df = df.copy()
     
-    train_dataset = TransactionDataset(train_seq, train_tgt)
-    val_dataset = TransactionDataset(val_seq, val_tgt)
+    cat_cols = ["gender", "category", "job", "age_group", "city_size"]
+    encoders = {}
+    for col in cat_cols:
+        le = LabelEncoder()
+        df[col] = le.fit_transform(df[col].astype(str))
+        encoders[col] = le
+    
+    sequences, targets = _create_sequences(df, SEQUENCE_LENGTH)
+    
+    return sequences, targets, encoders
+
+
+def train_and_evaluate(trial, df):
+    # split customers first
+    train_df, val_df = train_test_split(
+        df["cc_num"].unique(), test_size=0.2, random_state=1
+    )
+    
+    train_df = df[df["cc_num"].isin(train_df)].copy()
+    val_df = df[df["cc_num"].isin(val_df)].copy()
+    
+    # fit encoders on train only
+    cat_cols = ["gender", "category", "job", "age_group", "city_size"]
+    encoders = {}
+    for col in cat_cols:
+        le = LabelEncoder()
+        train_df[col] = le.fit_transform(train_df[col].astype(str))
+        val_df[col] = le.transform(val_df[col].astype(str))
+        encoders[col] = le
+    
+    sequences, targets = _create_sequences(train_df, SEQUENCE_LENGTH)
+    val_sequences, val_targets = _create_sequences(val_df, SEQUENCE_LENGTH)
+    
+    # fit scaler on train only
+    scaler = StandardScaler()
+    train_seq_flat = sequences.reshape(-1, len(FEATURES))
+    val_seq_flat = val_sequences.reshape(-1, len(FEATURES))
+    train_seq_flat = scaler.fit_transform(train_seq_flat)
+    val_seq_flat = scaler.transform(val_seq_flat)
+    train_seq = train_seq_flat.reshape(sequences.shape)
+    val_seq = val_seq_flat.reshape(val_sequences.shape)
+    
+    train_dataset = TransactionDataset(train_seq, targets)
+    val_dataset = TransactionDataset(val_seq, val_targets)
     
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
@@ -152,16 +175,16 @@ def train_and_evaluate(trial, sequences, targets):
     return val_loss
 
 
-def objective(trial, sequences, targets):
+def objective(trial, df):
     try:
-        val_loss = train_and_evaluate(trial, sequences, targets)
+        val_loss = train_and_evaluate(trial, df)
         return val_loss
     except Exception as e:
         print(f"  Trial {trial.number} failed: {e}")
         raise optuna.TrialPruned()
 
 
-def run_study(sequences, targets):
+def run_study(df):
     Path("studies").mkdir(exist_ok=True)
     
     study = optuna.create_study(
@@ -173,7 +196,7 @@ def run_study(sequences, targets):
         load_if_exists=True
     )
     
-    study.optimize(lambda trial: objective(trial, sequences, targets), n_trials=N_TRIALS, timeout=TIMEOUT)
+    study.optimize(lambda trial: objective(trial, df), n_trials=N_TRIALS, timeout=TIMEOUT)
     
     print(f"\nBest trial:")
     print(f"  Val Loss: {study.best_value:.4f}")
@@ -191,14 +214,9 @@ if __name__ == "__main__":
     df = load_transactions()
     df = add_features(df)
     
-    print("Preparing sequences...")
-    sequences, targets, encoders, scaler = prepare_data(df)
-    print(f"  Total sequences: {len(sequences):,}")
-    
     print(f"Running Optuna study: {STUDY_NAME}")
     print(f"  Trials: {N_TRIALS}, Timeout: {TIMEOUT}s")
     print(f"  Epochs per trial: {EPOCHS}")
-    print("  (Progress will print every 5 epochs)")
     
-    study = run_study(sequences, targets)
+    study = run_study(df)
     print("Study complete. Results saved to studies/")

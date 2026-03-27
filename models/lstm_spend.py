@@ -19,7 +19,7 @@ DROPOUT = 0.2
 FEATURES = [
     "age", "distance_km", "hour", "day_of_week", "month", "is_weekend",
     "city_pop", "gender", "category", "job", "age_group", "city_size",
-    "prophet_residual"
+    "rolling_mean", "rolling_std"
 ]
 
 TARGET = "amt"
@@ -55,22 +55,6 @@ class LSTMModel(nn.Module):
         return out.squeeze()
 
 
-def prepare_data(df: pd.DataFrame):
-
-    df = df.copy()
-    
-    cat_cols = ["gender", "category", "job", "age_group", "city_size"]
-    encoders = {}
-    for col in cat_cols:
-        le = LabelEncoder()
-        df[col] = le.fit_transform(df[col].astype(str))
-        encoders[col] = le
-    
-    sequences, targets = _create_sequences(df, SEQUENCE_LENGTH)
-    
-    return sequences, targets, encoders
-
-
 def _create_sequences(df, seq_length):
     sequences = []
     targets = []
@@ -97,30 +81,40 @@ def _create_sequences(df, seq_length):
 def train(df: pd.DataFrame, params: dict = None) -> tuple:
     df = df.copy()
     
+    # split customers first to avoid identity leakage
+    train_df, val_df = train_test_split(
+        df["cc_num"].unique(), test_size=0.2, random_state=1
+    )
+    
+    train_df = df[df["cc_num"].isin(train_df)].copy()
+    val_df = df[df["cc_num"].isin(val_df)].copy()
+    
+    # fit encoders on train only
     cat_cols = ["gender", "category", "job", "age_group", "city_size"]
     encoders = {}
     for col in cat_cols:
         le = LabelEncoder()
-        df[col] = le.fit_transform(df[col].astype(str))
+        train_df[col] = le.fit_transform(train_df[col].astype(str))
+        # handle unseen labels in val set
+        val_df[col] = val_df[col].astype(str).apply(
+            lambda x: le.transform([x])[0] if x in le.classes_ else le.transform([le.classes_[0]])[0]
+        )
         encoders[col] = le
-
-    sequences, targets = _create_sequences(df, SEQUENCE_LENGTH)
-
-    split_idx = int(len(sequences) * 0.8)
-    train_seq, val_seq = sequences[:split_idx], sequences[split_idx:]
-    train_tgt, val_tgt = targets[:split_idx], targets[split_idx:]
     
+    sequences, targets = _create_sequences(train_df, SEQUENCE_LENGTH)
+    val_sequences, val_targets = _create_sequences(val_df, SEQUENCE_LENGTH)
+    
+    # fit scaler on train only
     scaler = StandardScaler()
-    
-    train_seq_flat = train_seq.reshape(-1, len(FEATURES))
-    val_seq_flat = val_seq.reshape(-1, len(FEATURES))
+    train_seq_flat = sequences.reshape(-1, len(FEATURES))
+    val_seq_flat = val_sequences.reshape(-1, len(FEATURES))
     train_seq_flat = scaler.fit_transform(train_seq_flat)
     val_seq_flat = scaler.transform(val_seq_flat)
+    train_seq = train_seq_flat.reshape(sequences.shape)
+    val_seq = val_seq_flat.reshape(val_sequences.shape)
     
-    train_seq = train_seq_flat.reshape(train_seq.shape)
-    val_seq = val_seq_flat.reshape(val_seq.shape)
-    train_dataset = TransactionDataset(train_seq, train_tgt)
-    val_dataset = TransactionDataset(val_seq, val_tgt)
+    train_dataset = TransactionDataset(train_seq, targets)
+    val_dataset = TransactionDataset(val_seq, val_targets)
     
     train_loader = DataLoader(train_dataset, batch_size=BATCH_SIZE, shuffle=True)
     val_loader = DataLoader(val_dataset, batch_size=BATCH_SIZE, shuffle=False)
@@ -177,7 +171,7 @@ def train(df: pd.DataFrame, params: dict = None) -> tuple:
     model.eval()
     with torch.no_grad():
         preds = model(torch.FloatTensor(val_seq)).detach().numpy()
-    mae = np.mean(np.abs(preds - val_tgt))
+    mae = np.mean(np.abs(preds - val_targets))
     
     print(f"LSTM Spend -- RMSE: {rmse:.4f}  MAE: {mae:.4f}")
     return model, encoders, scaler, {"rmse": rmse, "mae": mae}

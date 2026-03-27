@@ -21,24 +21,20 @@ N_TRIALS = 50
 TIMEOUT = 3600
 
 
-def prepare_data(df):
+def objective(trial, df):
     df = df.copy()
+    
+    X_train, X_val, y_train, y_val = train_test_split(
+        df[FEATURES], df[TARGET], test_size=0.2, random_state=1
+    )
     
     cat_cols = ["gender", "category", "job", "age_group", "city_size"]
     encoders = {}
     for col in cat_cols:
         le = LabelEncoder()
-        df[col] = le.fit_transform(df[col].astype(str))
+        X_train[col] = le.fit_transform(X_train[col].astype(str))
+        X_val[col] = le.transform(X_val[col].astype(str))
         encoders[col] = le
-    
-    X = df[FEATURES]
-    y = df[TARGET]
-    return X, y, encoders
-
-
-def objective(trial, df):
-    X, y, _ = prepare_data(df)
-    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=1)
     
     params = {
         "objective": "reg:squarederror",

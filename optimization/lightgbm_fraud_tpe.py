@@ -7,6 +7,7 @@ from sklearn.metrics import f1_score
 from sklearn.preprocessing import LabelEncoder
 from pathlib import Path
 
+# Keep prophet_residual for fraud (target is is_fraud, not amt, so no leakage)
 FEATURES = [
     "age", "distance_km", "hour", "day_of_week", "month", "is_weekend",
     "city_pop", "gender", "category", "job", "age_group", "city_size",
@@ -21,33 +22,25 @@ N_TRIALS = 50
 TIMEOUT = 3600
 
 
-def prepare_data(df):
+def objective(trial, df):
     df = df.copy()
+    
+    # split first, fix: use df[TARGET] not y for stratify
+    X_train, X_val, y_train, y_val = train_test_split(
+        df[FEATURES], df[TARGET], test_size=0.2, random_state=1, stratify=df[TARGET]
+    )
     
     cat_cols = ["gender", "category", "job", "age_group", "city_size"]
     encoders = {}
     for col in cat_cols:
         le = LabelEncoder()
-        df[col] = le.fit_transform(df[col].astype(str))
+        X_train[col] = le.fit_transform(X_train[col].astype(str))
+        X_val[col] = le.transform(X_val[col].astype(str))
         encoders[col] = le
     
-    X = df[FEATURES]
-    y = df[TARGET]
-    return X, y, encoders
-
-
-def objective(trial, df):
-    X, y, _ = prepare_data(df)
-    X_train, X_val, y_train, y_val = train_test_split(
-        X, y, test_size=0.2, random_state=1, stratify=y
-    )
-    
-    # calculate scale_pos_weight for class imbalance
     n_legit = (y_train == 0).sum()
     n_fraud = (y_train == 1).sum()
     base_scale = n_legit / n_fraud
-    
-    # let Optuna tune a multiplier around the base scale
     scale_multiplier = trial.suggest_float("scale_multiplier", 0.5, 2.0)
     scale_pos_weight = base_scale * scale_multiplier
     

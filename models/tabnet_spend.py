@@ -11,7 +11,7 @@ from pathlib import Path
 FEATURES = [
     "age", "distance_km", "hour", "day_of_week", "month", "is_weekend",
     "city_pop", "gender", "category", "job", "age_group", "city_size",
-    "prophet_residual"
+    "rolling_mean", "rolling_std"
 ]
 
 TARGET = "amt"
@@ -31,26 +31,33 @@ BATCH_SIZE = 1024
 EPOCHS = 50
 
 
-def prepare_data(df: pd.DataFrame):
+def train(df: pd.DataFrame, params: dict = None) -> tuple:
     df = df.copy()
     
+    # split first
+    train_df, val_df = train_test_split(df, test_size=0.2, random_state=1)
+    y_train = train_df[TARGET].values
+    y_val = val_df[TARGET].values
+    
+    # fit encoders on train only
     cat_cols = ["gender", "category", "job", "age_group", "city_size"]
     encoders = {}
     for col in cat_cols:
         le = LabelEncoder()
-        df[col] = le.fit_transform(df[col].astype(str))
+        train_df[col] = le.fit_transform(train_df[col].astype(str))
+        # handle unseen labels in val set by mapping to most common category
+        val_df[col] = val_df[col].astype(str).apply(
+            lambda x: le.transform([x])[0] if x in le.classes_ else le.transform([le.classes_[0]])[0]
+        )
         encoders[col] = le
     
-    scaler = StandardScaler()
-    X = scaler.fit_transform(df[FEATURES])
-    y = df[TARGET].values
+    X_train = train_df[FEATURES].values
+    X_val = val_df[FEATURES].values
     
-    return X, y, encoders, scaler
-
-
-def train(df: pd.DataFrame, params: dict = None) -> tuple:
-    X, y, encoders, scaler = prepare_data(df)
-    X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=1)
+    # fit scaler on train only
+    scaler = StandardScaler()
+    X_train = scaler.fit_transform(X_train)
+    X_val = scaler.transform(X_val)
     
     p = params if params else PARAMS
     model = TabNetRegressor(**p)
@@ -58,7 +65,6 @@ def train(df: pd.DataFrame, params: dict = None) -> tuple:
     model.fit(
         X_train=X_train,
         y_train=y_train.reshape(-1, 1),
-        eval_set=[(X_val, y_val.reshape(-1, 1))],
         batch_size=BATCH_SIZE,
         max_epochs=EPOCHS,
         patience=10,
