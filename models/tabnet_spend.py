@@ -27,25 +27,22 @@ PARAMS = {
     "verbose": 0,
 }
 
-BATCH_SIZE = 1024
-EPOCHS = 50
+BATCH_SIZE = 2048
+EPOCHS = 20
 
 
 def train(df: pd.DataFrame, params: dict = None) -> tuple:
     df = df.copy()
     
-    # split first
     train_df, val_df = train_test_split(df, test_size=0.2, random_state=1)
     y_train = train_df[TARGET].values
     y_val = val_df[TARGET].values
     
-    # fit encoders on train only
     cat_cols = ["gender", "category", "job", "age_group", "city_size"]
     encoders = {}
     for col in cat_cols:
         le = LabelEncoder()
         train_df[col] = le.fit_transform(train_df[col].astype(str))
-        # handle unseen labels in val set by mapping to most common category
         val_df[col] = val_df[col].astype(str).apply(
             lambda x: le.transform([x])[0] if x in le.classes_ else le.transform([le.classes_[0]])[0]
         )
@@ -54,7 +51,6 @@ def train(df: pd.DataFrame, params: dict = None) -> tuple:
     X_train = train_df[FEATURES].values
     X_val = val_df[FEATURES].values
     
-    # fit scaler on train only
     scaler = StandardScaler()
     X_train = scaler.fit_transform(X_train)
     X_val = scaler.transform(X_val)
