@@ -8,8 +8,8 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 import joblib
 from pathlib import Path
 
-BATCH_SIZE = 1024
-EPOCHS = 30
+BATCH_SIZE = 4096
+EPOCHS = 10
 LEARNING_RATE = 0.001
 HIDDEN_LAYERS = [256, 128, 64]
 DROPOUT = 0.2
