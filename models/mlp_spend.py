@@ -8,11 +8,11 @@ from sklearn.preprocessing import LabelEncoder, StandardScaler
 import joblib
 from pathlib import Path
 
-BATCH_SIZE = 4096
+BATCH_SIZE = 8192
 EPOCHS = 10
-LEARNING_RATE = 0.001
-HIDDEN_LAYERS = [256, 128, 64]
-DROPOUT = 0.2
+LEARNING_RATE = 0.0095
+HIDDEN_LAYERS = [205, 372, 438, 72]
+DROPOUT = 0.40
 
 FEATURES = [
     "age", "distance_km", "hour", "day_of_week", "month", "is_weekend",

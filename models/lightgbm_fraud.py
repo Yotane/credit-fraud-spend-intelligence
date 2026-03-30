@@ -21,11 +21,14 @@ PARAMS = {
     "metric": "binary_logloss",
     "verbosity": -1,
     "n_estimators": 1000,
-    "learning_rate": 0.05,
-    "num_leaves": 31,
-    "max_depth": -1,
-    "reg_alpha": 0.0,
-    "reg_lambda": 0.0,
+    "learning_rate": 0.0604,
+    "num_leaves": 213,
+    "max_depth": 13,
+    "min_child_samples": 14,
+    "subsample": 0.793,
+    "colsample_bytree": 0.517,
+    "reg_alpha": 1.17e-08,
+    "reg_lambda": 2.54e-07,
 }
 
 
@@ -45,7 +48,7 @@ def train(df: pd.DataFrame, params: dict = None) -> tuple:
     
     n_legit = (y_train == 0).sum()
     n_fraud = (y_train == 1).sum()
-    scale = n_legit / n_fraud
+    scale = (n_legit / n_fraud) * 0.758  # scale_multiplier from Optuna
     
     p = params if params else PARAMS
     model = lgb.LGBMClassifier(**p, scale_pos_weight=scale)

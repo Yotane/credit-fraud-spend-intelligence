@@ -21,11 +21,14 @@ PARAMS = {
     "metric": "rmse",
     "verbosity": -1,
     "n_estimators": 1000,
-    "learning_rate": 0.05,
-    "num_leaves": 31,
-    "max_depth": -1,
-    "reg_alpha": 0.0,
-    "reg_lambda": 0.0,
+    "learning_rate": 0.0239,
+    "num_leaves": 78,
+    "max_depth": 13,
+    "min_child_samples": 73,
+    "subsample": 0.749,
+    "colsample_bytree": 0.893,
+    "reg_alpha": 1.65e-08,
+    "reg_lambda": 0.687,
 }
 
 

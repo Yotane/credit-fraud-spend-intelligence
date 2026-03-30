@@ -19,12 +19,14 @@ TARGET = "amt"
 PARAMS = {
     "objective": "reg:squarederror",
     "n_estimators": 1000,
-    "learning_rate": 0.05,
-    "max_depth": 6,
-    "reg_alpha": 0.0,
-    "reg_lambda": 1.0,
-    "subsample": 0.8,
-    "colsample_bytree": 0.8,
+    "learning_rate": 0.00449,
+    "max_depth": 11,
+    "min_child_weight": 37,
+    "subsample": 0.710,
+    "colsample_bytree": 0.801,
+    "reg_alpha": 0.0808,
+    "reg_lambda": 1.82e-06,
+    "gamma": 9.30e-05,
     "verbosity": 0,
 }
 
