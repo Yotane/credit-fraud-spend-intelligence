@@ -28,8 +28,8 @@ def compute_prophet_residuals(df: pd.DataFrame, verbose: bool = True) -> pd.Data
     df["rolling_std"] = df["rolling_std"].replace(0, 1)
     
     # residual for fraud detection (safe because target is is_fraud, not amt)
-    df["prophet_residual"] = (df["amt"] - df["rolling_mean"]) / df["rolling_std"]
-    df["prophet_residual"] = df["prophet_residual"].fillna(0)
+    df["rolling_zscore"] = (df["amt"] - df["rolling_mean"]) / df["rolling_std"]
+    df["rolling_zscore"] = df["rolling_zscore"].fillna(0)
     
     # fill NaNs for first transaction of each customer
     df["rolling_mean"] = df["rolling_mean"].fillna(0)

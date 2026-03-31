@@ -118,7 +118,7 @@ def analyze_fraud_model():
     features = [
         "age", "distance_km", "hour", "day_of_week", "month", "is_weekend",
         "city_pop", "gender", "category", "job", "age_group", "city_size",
-        "prophet_residual"
+        "rolling_zscore"
     ]
     
     X, feature_names = prepare_shap_data(df, features, encoders, scaler)
