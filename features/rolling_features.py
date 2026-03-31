@@ -5,7 +5,7 @@ import warnings
 warnings.filterwarnings("ignore")
 
 
-def compute_prophet_residuals(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
+def compute_rolling_features(df: pd.DataFrame, verbose: bool = True) -> pd.DataFrame:
     # rolling z-score with no leakage. uses shift(1) to only see past data
     df = df.copy()
     df = df.sort_values(["cc_num", "trans_date_trans_time"]).reset_index(drop=True)
@@ -35,8 +35,8 @@ def compute_prophet_residuals(df: pd.DataFrame, verbose: bool = True) -> pd.Data
     df["rolling_mean"] = df["rolling_mean"].fillna(0)
     
     if verbose:
-        count = len(df[df["prophet_residual"] != 0])
-        print(f"  Successfully computed residuals for {count:,} transactions")
-        print(f"  Residual stats: mean={df['prophet_residual'].mean():.2f}, std={df['prophet_residual'].std():.2f}")
+        count = len(df[df["rolling_zscore"] != 0])
+        print(f"  Successfully computed rolling features for {count:,} transactions")
+        print(f"  Residual stats: mean={df['rolling_zscore'].mean():.2f}, std={df['rolling_zscore'].std():.2f}")
     
     return df
