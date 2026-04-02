@@ -13,23 +13,24 @@ FEATURES = [
     "rolling_mean", "rolling_std"
 ]
 
-
 TARGET = "amt"
+
+CATEGORICAL_FEATURES = ["gender", "category", "job", "age_group", "city_size"]
 
 STUDY_NAME = "xgboost_spend_tpe"
 STORAGE = "sqlite:///studies/xgboost_spend_tpe.db"
-N_TRIALS = 50
-TIMEOUT = 3600
+N_TRIALS = 100
+TIMEOUT = 7200
 
 
 def objective(trial, df):
     df = df.copy()
     
     X_train, X_val, y_train, y_val = train_test_split(
-        df[FEATURES], df[TARGET], test_size=0.2, random_state=1
+        df[FEATURES], df[TARGET], test_size=0.2, random_state=trial.number
     )
     
-    cat_cols = ["gender", "category", "job", "age_group", "city_size"]
+    cat_cols = CATEGORICAL_FEATURES
     encoders = {}
     for col in cat_cols:
         le = LabelEncoder()
@@ -37,27 +38,35 @@ def objective(trial, df):
         X_val[col] = le.transform(X_val[col].astype(str))
         encoders[col] = le
     
+    dtrain = xgb.DMatrix(X_train, label=y_train)
+    dval = xgb.DMatrix(X_val, label=y_val)
+    
     params = {
         "objective": "reg:squarederror",
         "eval_metric": "rmse",
-        "n_estimators": 1000,
-        "learning_rate": trial.suggest_float("learning_rate", 1e-3, 0.1, log=True),
-        "max_depth": trial.suggest_int("max_depth", 3, 15),
-        "min_child_weight": trial.suggest_int("min_child_weight", 1, 200),
-        "subsample": trial.suggest_float("subsample", 0.5, 1.0),
-        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
-        "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 10.0, log=True),
-        "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 10.0, log=True),
+        "verbosity": 0,
+        "learning_rate": trial.suggest_float("learning_rate", 1e-4, 0.3, log=True),
+        "max_depth": trial.suggest_int("max_depth", 3, 20),
+        "min_child_weight": trial.suggest_float("min_child_weight", 1e-8, 100.0, log=True),
+        "subsample": trial.suggest_float("subsample", 0.4, 1.0),
+        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.4, 1.0),
+        "colsample_bylevel": trial.suggest_float("colsample_bylevel", 0.4, 1.0),
+        "colsample_bynode": trial.suggest_float("colsample_bynode", 0.4, 1.0),
+        "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 100.0, log=True),
+        "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 100.0, log=True),
         "gamma": trial.suggest_float("gamma", 1e-8, 10.0, log=True),
     }
     
-    model = xgb.XGBRegressor(**params, early_stopping_rounds=50, verbose=False)
-    model.fit(
-        X_train, y_train,
-        eval_set=[(X_val, y_val)]
+    model = xgb.train(
+        params,
+        dtrain,
+        num_boost_round=2000,
+        evals=[(dval, "val")],
+        verbose_eval=False,
+        early_stopping_rounds=100
     )
     
-    preds = model.predict(X_val)
+    preds = model.predict(dval)
     rmse = mean_squared_error(y_val, preds) ** 0.5
     
     return rmse
@@ -69,10 +78,10 @@ def run_study(df):
     study = optuna.create_study(
         study_name=STUDY_NAME,
         storage=STORAGE,
-        sampler=optuna.samplers.TPESampler(seed=1),
-        pruner=optuna.pruners.MedianPruner(),
+        sampler=optuna.samplers.TPESampler(seed=42, n_startup_trials=20),
+        pruner=optuna.pruners.HyperbandPruner(min_resource=50, max_resource=2000),
         direction="minimize",
-        load_if_exists=True
+        load_if_exists=False
     )
     
     study.optimize(lambda trial: objective(trial, df), n_trials=N_TRIALS, timeout=TIMEOUT)
