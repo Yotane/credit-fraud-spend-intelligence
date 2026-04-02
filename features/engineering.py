@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from features.prophet_residual import compute_prophet_residuals
+from features.rolling_features import compute_rolling_features
 
 def add_features(df: pd.DataFrame) -> pd.DataFrame:
     df = df.copy()
@@ -30,7 +30,7 @@ def add_features(df: pd.DataFrame) -> pd.DataFrame:
         labels=["rural", "suburban", "urban"]
     )
 
-    df = compute_prophet_residuals(df, verbose=True)
+    df = compute_rolling_features(df, verbose=True)
 
     return df
 
