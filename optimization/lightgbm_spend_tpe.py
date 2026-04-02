@@ -19,43 +19,25 @@ CATEGORICAL_FEATURES = ["gender", "category", "job", "age_group", "city_size"]
 
 STUDY_NAME = "lightgbm_spend_tpe"
 STORAGE = "sqlite:///studies/lightgbm_spend_tpe.db"
-N_TRIALS = 100
-TIMEOUT = 7200
+N_TRIALS = 50
+TIMEOUT = 3600
+RANDOM_STATE = 1
 
 
-def objective(trial, df):
-    df = df.copy()
-    
-    X_train, X_val, y_train, y_val = train_test_split(
-        df[FEATURES], df[TARGET], test_size=0.2, random_state=trial.number
-    )
-    
-    cat_cols = CATEGORICAL_FEATURES
-    encoders = {}
-    for col in cat_cols:
-        le = LabelEncoder()
-        X_train[col] = le.fit_transform(X_train[col].astype(str))
-        X_val[col] = le.transform(X_val[col].astype(str))
-        encoders[col] = le
-    
-    cat_indices = [X_train.columns.get_loc(col) for col in cat_cols]
-    
+def objective(trial, X_train, X_val, y_train, y_val, cat_indices):
     params = {
         "objective": "regression",
         "metric": "rmse",
         "verbosity": -1,
-        "n_estimators": 2000,
-        "learning_rate": trial.suggest_float("learning_rate", 1e-4, 0.3, log=True),
-        "num_leaves": trial.suggest_int("num_leaves", 15, 511),
-        "max_depth": trial.suggest_int("max_depth", 3, 20),
-        "min_child_samples": trial.suggest_int("min_child_samples", 5, 500),
-        "subsample": trial.suggest_float("subsample", 0.4, 1.0),
-        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.4, 1.0),
-        "colsample_bynode": trial.suggest_float("colsample_bynode", 0.4, 1.0),
-        "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 100.0, log=True),
-        "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 100.0, log=True),
-        "min_child_weight": trial.suggest_float("min_child_weight", 1e-8, 100.0, log=True),
-        "feature_fraction_by_node": trial.suggest_float("feature_fraction_by_node", 0.4, 1.0),
+        "n_estimators": 1000,
+        "learning_rate": trial.suggest_float("learning_rate", 1e-3, 0.1, log=True),
+        "num_leaves": trial.suggest_int("num_leaves", 15, 255),
+        "max_depth": trial.suggest_int("max_depth", 3, 15),
+        "min_child_samples": trial.suggest_int("min_child_samples", 10, 200),
+        "subsample": trial.suggest_float("subsample", 0.5, 1.0),
+        "colsample_bytree": trial.suggest_float("colsample_bytree", 0.5, 1.0),
+        "reg_alpha": trial.suggest_float("reg_alpha", 1e-8, 10.0, log=True),
+        "reg_lambda": trial.suggest_float("reg_lambda", 1e-8, 10.0, log=True),
         "categorical_feature": cat_indices,
     }
     
@@ -64,7 +46,7 @@ def objective(trial, df):
         X_train, y_train,
         eval_set=[(X_val, y_val)],
         callbacks=[
-            lgb.early_stopping(100, verbose=False),
+            lgb.early_stopping(50, verbose=False),
             lgb.log_evaluation(0)
         ]
     )
@@ -78,16 +60,36 @@ def objective(trial, df):
 def run_study(df):
     Path("studies").mkdir(exist_ok=True)
     
+    X = df[FEATURES].copy()
+    y = df[TARGET].copy()
+    
+    cat_cols = CATEGORICAL_FEATURES
+    encoders = {}
+    for col in cat_cols:
+        le = LabelEncoder()
+        X[col] = le.fit_transform(X[col].astype(str))
+        encoders[col] = le
+    
+    cat_indices = [X.columns.get_loc(col) for col in cat_cols]
+    
+    X_train, X_val, y_train, y_val = train_test_split(
+        X, y, test_size=0.2, random_state=RANDOM_STATE
+    )
+    
     study = optuna.create_study(
         study_name=STUDY_NAME,
         storage=STORAGE,
-        sampler=optuna.samplers.TPESampler(seed=42, n_startup_trials=20),
-        pruner=optuna.pruners.HyperbandPruner(min_resource=50, max_resource=2000),
+        sampler=optuna.samplers.TPESampler(seed=1, n_startup_trials=10),
+        pruner=optuna.pruners.MedianPruner(n_startup_trials=5, n_warmup_steps=5),
         direction="minimize",
-        load_if_exists=True
+        load_if_exists=False
     )
     
-    study.optimize(lambda trial: objective(trial, df), n_trials=N_TRIALS, timeout=TIMEOUT)
+    study.optimize(
+        lambda trial: objective(trial, X_train, X_val, y_train, y_val, cat_indices),
+        n_trials=N_TRIALS,
+        timeout=TIMEOUT
+    )
     
     print(f"\nBest trial:")
     print(f"  RMSE: {study.best_value:.4f}")
@@ -106,6 +108,7 @@ if __name__ == "__main__":
     
     print(f"Running Optuna study: {STUDY_NAME}")
     print(f"  Trials: {N_TRIALS}, Timeout: {TIMEOUT}s")
+    print(f"  Random state: {RANDOM_STATE} (fixed for all trials)")
     
     study = run_study(df)
     print("Study complete. Results saved to studies/")
