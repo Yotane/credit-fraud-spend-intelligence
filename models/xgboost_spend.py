@@ -7,7 +7,6 @@ from sklearn.preprocessing import LabelEncoder
 import joblib
 from pathlib import Path
 
-# Use rolling_mean and rolling_std instead of prophet_residual to avoid target leakage
 FEATURES = [
     "age", "distance_km", "hour", "day_of_week", "month", "is_weekend",
     "city_pop", "gender", "category", "job", "age_group", "city_size",
@@ -18,16 +17,17 @@ TARGET = "amt"
 
 PARAMS = {
     "objective": "reg:squarederror",
-    "n_estimators": 1000,
-    "learning_rate": 0.00449,
-    "max_depth": 11,
-    "min_child_weight": 37,
-    "subsample": 0.710,
-    "colsample_bytree": 0.801,
-    "reg_alpha": 0.0808,
-    "reg_lambda": 1.82e-06,
-    "gamma": 9.30e-05,
+    "eval_metric": "rmse",
     "verbosity": 0,
+    "n_estimators": 2000,
+    "learning_rate": 0.00102,
+    "max_depth": 5,
+    "min_child_weight": 19.8,
+    "subsample": 0.885,
+    "colsample_bytree": 0.780,
+    "reg_alpha": 7.34e-07,
+    "reg_lambda": 8.43,
+    "gamma": 0.000715,
 }
 
 
@@ -51,7 +51,7 @@ def train(df: pd.DataFrame, params: dict = None) -> tuple:
     X_train, X_val, y_train, y_val = train_test_split(X, y, test_size=0.2, random_state=1)
     
     p = params if params else PARAMS
-    model = xgb.XGBRegressor(**p, early_stopping_rounds=50, eval_metric="rmse")
+    model = xgb.XGBRegressor(**p)
     model.fit(
         X_train, y_train,
         eval_set=[(X_val, y_val)],
@@ -66,9 +66,9 @@ def train(df: pd.DataFrame, params: dict = None) -> tuple:
     return model, encoders, {"rmse": rmse, "mae": mae}
 
 
-def save(model, path: str = "models/xgb_spend.pkl"):
+def save(model, encoders, path: str = "models/xgb_spend.pkl"):
     Path(path).parent.mkdir(exist_ok=True)
-    joblib.dump(model, path)
+    joblib.dump({"model": model, "encoders": encoders}, path)
 
 
 if __name__ == "__main__":
@@ -78,5 +78,5 @@ if __name__ == "__main__":
     df = load_transactions()
     df = add_features(df)
     model, encoders, metrics = train(df)
-    save(model)
+    save(model, encoders)
     print("Model saved.")

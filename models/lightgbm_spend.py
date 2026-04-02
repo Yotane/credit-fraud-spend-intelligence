@@ -7,7 +7,6 @@ from sklearn.preprocessing import LabelEncoder
 import joblib
 from pathlib import Path
 
-# Use rolling_mean and rolling_std instead of prophet_residual to avoid target leakage
 FEATURES = [
     "age", "distance_km", "hour", "day_of_week", "month", "is_weekend",
     "city_pop", "gender", "category", "job", "age_group", "city_size",
@@ -20,15 +19,18 @@ PARAMS = {
     "objective": "regression",
     "metric": "rmse",
     "verbosity": -1,
-    "n_estimators": 1000,
-    "learning_rate": 0.0239,
-    "num_leaves": 78,
-    "max_depth": 13,
-    "min_child_samples": 73,
-    "subsample": 0.749,
-    "colsample_bytree": 0.893,
-    "reg_alpha": 1.65e-08,
-    "reg_lambda": 0.687,
+    "n_estimators": 2000,
+    "learning_rate": 0.0466,
+    "num_leaves": 63,
+    "max_depth": 6,
+    "min_child_samples": 416,
+    "subsample": 0.970,
+    "colsample_bytree": 0.723,
+    "colsample_bynode": 0.730,
+    "reg_alpha": 7.39e-06,
+    "reg_lambda": 0.000458,
+    "min_child_weight": 1.17e-05,
+    "feature_fraction_by_node": 0.443,
 }
 
 
@@ -67,9 +69,9 @@ def train(df: pd.DataFrame, params: dict = None) -> tuple:
     return model, encoders, {"rmse": rmse, "mae": mae}
 
 
-def save(model, path: str = "models/lgbm_spend.pkl"):
+def save(model, encoders, path: str = "models/lgbm_spend.pkl"):
     Path(path).parent.mkdir(exist_ok=True)
-    joblib.dump(model, path)
+    joblib.dump({"model": model, "encoders": encoders}, path)
 
 
 if __name__ == "__main__":
@@ -79,5 +81,5 @@ if __name__ == "__main__":
     df = load_transactions()
     df = add_features(df)
     model, encoders, metrics = train(df)
-    save(model)
+    save(model, encoders)
     print("Model saved.")
