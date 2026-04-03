@@ -58,7 +58,6 @@ The distribution shows distinct peaks around common price points ($5, $10, $25, 
 
 ### Fraudulent Transaction Patterns
 
-![Fraud Spend Distribution](plots/fraud_spend_only.png)
 ![Fraud vs Legitimate Spend](plots/fraud_vs_legit_spend.png)
 
 Fraudulent transactions display a distinct spending pattern compared to legitimate transactions:
@@ -82,9 +81,6 @@ Fraudulent transactions display a distinct spending pattern compared to legitima
 - **Lowest spend:** personal_care ($47), food_dining ($51), grocery_net ($54)
 - **Volume leaders:** gas_transport (132K transactions), grocery_pos (124K), home (123K)
 
-**Transaction Volume:**
-Categories show varying transaction frequencies, with essential services (gas, groceries) dominating volume while discretionary categories (travel, entertainment) show lower frequency but higher average values.
-
 ### Temporal Patterns
 
 ![Spend by Hour](plots/spend_by_hour.png)
@@ -96,6 +92,86 @@ Transaction amounts vary significantly by hour of day:
 - **Late night anomaly:** Sharp spike at 22:00 suggests different spending behavior (possibly entertainment, emergencies, or fraud)
 
 The noon dip likely reflects lunch-time micro-transactions, while late evening peaks may indicate larger purchases made after work hours or automated recurring billing cycles.
+
+---
+
+## Predictive Models
+
+### Spend Prediction Models
+
+**Objective:** Predict the transaction amount (continuous regression task)
+
+**Models Evaluated:**
+1. **LightGBM Regressor** - Gradient boosting framework using tree-based learners
+2. **XGBoost Regressor** - Optimized gradient boosting library
+3. **MLP (Multi-Layer Perceptron)** - Feedforward neural network with PyTorch
+4. **LSTM (Long Short-Term Memory)** - Recurrent neural network for sequential patterns
+
+**Target Variable:** `amt` (transaction amount in dollars)
+
+**Evaluation Metric:** RMSE (Root Mean Squared Error) - penalizes large prediction errors
+
+**Key Features:** rolling_mean, rolling_std, category, hour, age, city_pop, and other demographic/transaction features
+
+---
+
+### Fraud Detection Model
+
+**Objective:** Classify transactions as fraudulent or legitimate (binary classification task)
+
+**Model Used:**
+- **LightGBM Classifier** - Gradient boosting framework optimized for speed and performance
+
+**Target Variable:** `is_fraud` (binary: 0 = legitimate, 1 = fraudulent)
+
+**Evaluation Metric:** F1 Score - balances precision and recall, critical for imbalanced fraud detection
+
+**Key Challenge:** Severe class imbalance (0.58% fraud rate) addressed through scale_pos_weight optimization
+
+**Key Features:** rolling_zscore (anomaly detection), category, hour, job, and behavioral pattern features
+
+**Why Different Models for Each Task:**
+- Spend prediction requires regression models that output continuous values
+- Fraud detection requires classification models that output probability scores
+- The rolling features are split to prevent target leakage: rolling_mean/rolling_std for spend, rolling_zscore for fraud
+
+---
+
+## Hyperparameter Optimization Strategy
+
+### Methodology
+
+Hyperparameter tuning was conducted using **Optuna**, an automatic hyperparameter optimization software framework, specifically employing the **Tree-structured Parzen Estimator (TPE)** sampler. TPE is a Bayesian optimization algorithm that models the probability distribution of good versus bad hyperparameters to efficiently explore the search space.
+
+**Optimization Configuration:**
+- **Sampler:** TPESampler (seed=42 for reproducibility)
+- **Pruner:** MedianPruner (eliminates unpromising trials early)
+- **Trials:** 50 iterations per model
+- **Timeout:** 1 hour per study
+- **Validation Strategy:** Fixed random seed (random_state=1) for train/validation splits across all trials to ensure fair comparison
+
+### Search Space Design
+
+The search spaces were designed to be broad enough to discover non-obvious configurations while respecting library constraints:
+
+| Parameter | LightGBM Range | XGBoost Range | Rationale |
+|-----------|----------------|---------------|-----------|
+| `learning_rate` | 1e-3 to 0.1 (log) | 1e-3 to 0.1 (log) | Critical for convergence speed and final accuracy |
+| `max_depth` | Unlimited (-1) or 3-20 | 3-15 | Controls model complexity; unlimited allowed to test defaults |
+| `num_leaves` / `max_depth` | 15-255 | N/A | Primary complexity control for LightGBM |
+| `min_child_samples` / `weight` | 10-200 / 1-200 | 10-200 / 1-200 | Prevents overfitting to noise |
+| `subsample` / `colsample` | 0.5-1.0 | 0.5-1.0 | Introduces randomness to reduce variance |
+| `reg_alpha` / `reg_lambda` | 1e-8 to 10.0 (log) | 1e-8 to 10.0 (log) | L1/L2 regularization strength |
+
+### Key Optimization Insights
+
+1. **Fixed-Seed Evaluation:** Unlike some studies that vary random seeds per trial, a single fixed seed was used for all trials. This isolates the effect of hyperparameters from data variance, ensuring that performance gains are due to better parameters, not luckier data splits.
+
+2. **Early Stopping Integration:** All trials utilized early stopping (50 rounds) to prevent overfitting and reduce training time, allowing the optimizer to focus on generalization performance rather than raw training loss.
+
+3. **Conditional Parameters:** For LightGBM, `max_depth` was implemented as a conditional parameter, allowing the optimizer to choose between "unlimited" depth (matching the library default) or a specific integer value. This ensured the search space included the baseline configuration for fair comparison.
+
+4. **Diminishing Returns:** The optimization process revealed that for clean, structured tabular data, the marginal gain from extensive tuning is often minimal compared to the effort invested, particularly for robust algorithms like LightGBM.
 
 ---
 
@@ -309,8 +385,6 @@ Project 3/
 ├── plots/                   # EDA visualizations
 │   ├── fraud_by_category.png
 │   ├── fraud_rate.png
-│   ├── fraud_spend_only.png
-│   ├── fraud_vs_legit_spend.png
 │   ├── spend_by_category.png
 │   ├── spend_by_hour.png
 │   └── spend_distribution.png
