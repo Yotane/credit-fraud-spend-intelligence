@@ -1,14 +1,10 @@
-Perfect! Now I have all the context needed. Here is the updated README with proper background and EDA analysis before the key results:
-
----
-
 # Credit Fraud & Spend Intelligence
 
 **What behavioral and demographic patterns predict high spending, and do fraudulent transactions mimic those same patterns or have clearly different signatures?**
 
 An end-to-end machine learning project that answers that question through leakage-free feature engineering, rolling z-score anomaly detection, gradient boosting models, deep learning baselines, Optuna hyperparameter optimization, and SHAP-based interpretability. Approximately 1.3 million credit card transactions are analyzed to model spending patterns and detect fraud with production-ready code.
 
-Dataset sourced from Kaggle — ["Credit Card Transactions Dataset"](https://www.kaggle.com/datasets/priyamchoksi/credit-card-transactions-dataset) by priyamchoksi.
+Dataset sourced from Kaggle: ["Credit Card Transactions Dataset"](https://www.kaggle.com/datasets/priyamchoksi/credit-card-transactions-dataset) by priyamchoksi.
 
 ---
 
@@ -36,7 +32,7 @@ The dataset contains 1,296,675 credit card transactions spanning from January 20
 
 ### Class Distribution
 
-![Fraud vs Legitimate](eda_plots/fraud_vs_legitimate.png)
+![Fraud vs Legitimate](plots/fraud_rate.png)
 
 The dataset exhibits severe class imbalance typical of fraud detection scenarios:
 - **Legitimate transactions:** 1,289,193 (99.42%)
@@ -50,7 +46,7 @@ This 172:1 imbalance ratio necessitates specialized handling through techniques 
 
 ### Transaction Amount Distribution
 
-![Spend Distribution](eda_plots/spend_distribution.png)
+![Spend Distribution](plots/spend_distribution.png)
 
 Transaction amounts exhibit a heavily right-skewed distribution:
 - **Median transaction:** ~$40
@@ -62,7 +58,8 @@ The distribution shows distinct peaks around common price points ($5, $10, $25, 
 
 ### Fraudulent Transaction Patterns
 
-![Fraud Spend Distribution](eda_plots/fraud_spend_distribution.png)
+![Fraud Spend Distribution](plots/fraud_spend_only.png)
+![Fraud vs Legitimate Spend](plots/fraud_vs_legit_spend.png)
 
 Fraudulent transactions display a distinct spending pattern compared to legitimate transactions:
 - **Small test transactions:** Peak near $0-$10 (card testing behavior)
@@ -72,7 +69,8 @@ Fraudulent transactions display a distinct spending pattern compared to legitima
 
 ### Merchant Category Analysis
 
-![Category Analysis](eda_plots/category_analysis.png)
+![Fraud by Category](plots/fraud_by_category.png)
+![Spend by Category](plots/spend_by_category.png)
 
 **Fraud Rate by Category:**
 - **Highest risk:** shopping_net (1.75%), misc_net (1.45%), grocery_pos (1.42%)
@@ -89,7 +87,7 @@ Categories show varying transaction frequencies, with essential services (gas, g
 
 ### Temporal Patterns
 
-![Spend by Hour](eda_plots/spend_by_hour.png)
+![Spend by Hour](plots/spend_by_hour.png)
 
 Transaction amounts vary significantly by hour of day:
 - **Peak spending hours:** 22:00-23:00 ($80+ average) and 0:00-3:00 ($78-80 average)
@@ -306,6 +304,14 @@ Project 3/
 ├── analysis/                # SHAP analysis and plots
 │   ├── shap_analysis.py
 │   └── plots/
+├── plots/                   # EDA visualizations
+│   ├── fraud_by_category.png
+│   ├── fraud_rate.png
+│   ├── fraud_spend_only.png
+│   ├── fraud_vs_legit_spend.png
+│   ├── spend_by_category.png
+│   ├── spend_by_hour.png
+│   └── spend_distribution.png
 ├── studies/                 # SQLite databases for Optuna results
 └── README.md
 ```
