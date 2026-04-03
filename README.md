@@ -1,3 +1,7 @@
+Perfect! Now I have all the context needed. Here is the updated README with proper background and EDA analysis before the key results:
+
+---
+
 # Credit Fraud & Spend Intelligence
 
 **What behavioral and demographic patterns predict high spending, and do fraudulent transactions mimic those same patterns or have clearly different signatures?**
@@ -5,6 +9,95 @@
 An end-to-end machine learning project that answers that question through leakage-free feature engineering, rolling z-score anomaly detection, gradient boosting models, deep learning baselines, Optuna hyperparameter optimization, and SHAP-based interpretability. Approximately 1.3 million credit card transactions are analyzed to model spending patterns and detect fraud with production-ready code.
 
 Dataset sourced from Kaggle — ["Credit Card Transactions Dataset"](https://www.kaggle.com/datasets/priyamchoksi/credit-card-transactions-dataset) by priyamchoksi.
+
+---
+
+## Dataset Overview
+
+### Data Description
+
+The dataset contains 1,296,675 credit card transactions spanning from January 2019 onwards. Each transaction record includes:
+
+**Transaction Details:**
+- Transaction timestamp and date
+- Transaction amount (ranging from $0.01 to $30,000+)
+- Merchant category (15 categories including grocery, shopping, gas transport, entertainment)
+- Fraud label (binary: is_fraud)
+
+**Cardholder Information:**
+- Demographics: age, gender, occupation
+- Location: city, state, zip code, population
+- Date of birth
+
+**Geographic Data:**
+- Cardholder coordinates (lat, long)
+- Merchant coordinates (merch_lat, merch_long)
+- Distance calculations between cardholder and merchant locations
+
+### Class Distribution
+
+![Fraud vs Legitimate](eda_plots/fraud_vs_legitimate.png)
+
+The dataset exhibits severe class imbalance typical of fraud detection scenarios:
+- **Legitimate transactions:** 1,289,193 (99.42%)
+- **Fraudulent transactions:** 7,482 (0.58%)
+
+This 172:1 imbalance ratio necessitates specialized handling through techniques like scale_pos_weight optimization rather than naive classification approaches.
+
+---
+
+## Exploratory Data Analysis
+
+### Transaction Amount Distribution
+
+![Spend Distribution](eda_plots/spend_distribution.png)
+
+Transaction amounts exhibit a heavily right-skewed distribution:
+- **Median transaction:** ~$40
+- **Mean transaction:** ~$75
+- **Majority of transactions:** Under $100 (85% of dataset)
+- **Long tail:** Transactions above $500 represent less than 2% of total volume
+
+The distribution shows distinct peaks around common price points ($5, $10, $25, $50), reflecting typical retail pricing strategies.
+
+### Fraudulent Transaction Patterns
+
+![Fraud Spend Distribution](eda_plots/fraud_spend_distribution.png)
+
+Fraudulent transactions display a distinct spending pattern compared to legitimate transactions:
+- **Small test transactions:** Peak near $0-$10 (card testing behavior)
+- **Medium fraud:** Cluster around $300-$400 (below typical alert thresholds)
+- **Large fraud:** Distributed across $700-$1,200 range
+- **Avoidance pattern:** Noticeable dip around $100-$200, suggesting fraudsters avoid common price points that might trigger scrutiny
+
+### Merchant Category Analysis
+
+![Category Analysis](eda_plots/category_analysis.png)
+
+**Fraud Rate by Category:**
+- **Highest risk:** shopping_net (1.75%), misc_net (1.45%), grocery_pos (1.42%)
+- **Lowest risk:** health_fitness (0.15%), home (0.16%), food_dining (0.17%)
+- **Key insight:** Online/remote transactions (net suffix) show 5-10x higher fraud rates than in-person (pos) transactions
+
+**Average Spend by Category:**
+- **Highest spend:** grocery_pos ($117), travel ($112), shopping_net ($88)
+- **Lowest spend:** personal_care ($47), food_dining ($51), grocery_net ($54)
+- **Volume leaders:** gas_transport (132K transactions), grocery_pos (124K), home (123K)
+
+**Transaction Volume:**
+Categories show varying transaction frequencies, with essential services (gas, groceries) dominating volume while discretionary categories (travel, entertainment) show lower frequency but higher average values.
+
+### Temporal Patterns
+
+![Spend by Hour](eda_plots/spend_by_hour.png)
+
+Transaction amounts vary significantly by hour of day:
+- **Peak spending hours:** 22:00-23:00 ($80+ average) and 0:00-3:00 ($78-80 average)
+- **Lowest spending:** 12:00 noon ($61 average)
+- **Business hours pattern:** Relatively stable $75-77 range during 4:00-11:00 and 13:00-21:00
+- **Late night anomaly:** Sharp spike at 22:00 suggests different spending behavior (possibly entertainment, emergencies, or fraud)
+
+The noon dip likely reflects lunch-time micro-transactions, while late evening peaks may indicate larger purchases made after work hours or automated recurring billing cycles.
 
 ---
 
@@ -253,7 +346,7 @@ python -m analysis.shap_analysis
 
 ## Conclusion
 
-This project demonstrates that for financial tabular data:
+This project demonstrates that for financial tabular 
 
 1. **Start with LightGBM or XGBoost defaults** - They are often sufficient for production
 2. **Prioritize class imbalance handling** for fraud detection tasks
