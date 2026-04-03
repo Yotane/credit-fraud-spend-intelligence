@@ -19,18 +19,15 @@ PARAMS = {
     "objective": "regression",
     "metric": "rmse",
     "verbosity": -1,
-    "n_estimators": 2000,
-    "learning_rate": 0.0466,
-    "num_leaves": 63,
-    "max_depth": 6,
-    "min_child_samples": 416,
-    "subsample": 0.970,
-    "colsample_bytree": 0.723,
-    "colsample_bynode": 0.730,
-    "reg_alpha": 7.39e-06,
-    "reg_lambda": 0.000458,
-    "min_child_weight": 1.17e-05,
-    "feature_fraction_by_node": 0.443,
+    "n_estimators": 1000,
+    "max_depth": -1,  # Unlimited depth (hardcoded in study)
+    "learning_rate": 0.00796,
+    "num_leaves": 254,
+    "min_child_samples": 75,
+    "subsample": 0.761,
+    "colsample_bytree": 0.616,
+    "reg_alpha": 0.00383,
+    "reg_lambda": 3.32e-07,
 }
 
 
