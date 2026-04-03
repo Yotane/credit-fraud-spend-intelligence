@@ -296,70 +296,40 @@ Same amount, same category but different fraud score based on timing plus deviat
 
 ---
 
-## Feature Engineering Strategy
+## Feature Engineering & Data Integrity
 
-### Rolling Features
+### Rolling Features Strategy
 
-Three rolling features are computed per customer based on the past 7 transactions:
+Three rolling features are computed per customer based on their past 7 transactions:
 
-| Feature | Formula | Purpose | Used In |
-|---------|---------|---------|---------|
-| rolling_mean | avg(past 7 amounts) | Baseline spending level | Spend models |
-| rolling_std | std(past 7 amounts) | Spending consistency | Spend models |
-| rolling_zscore | (amt - rolling_mean) / rolling_std | Anomaly score (rolling z-score) | Fraud models |
+| Feature | Formula | Purpose | Task |
+|---------|---------|---------|------|
+| `rolling_mean` | avg(past 7 amounts) | Baseline spending level | Spend |
+| `rolling_std` | std(past 7 amounts) | Spending consistency | Spend |
+| `rolling_zscore` | (amt - mean) / std | Anomaly detection | Fraud |
 
-### Why the Name "rolling_zscore"?
+**Critical Design Decision:** The `rolling_zscore` feature contains the target variable `amt` in its formula. Using it for spend prediction would cause target leakage. Therefore:
+- **Spend models** use `rolling_mean` and `rolling_std` (safe predictors of amount)
+- **Fraud models** use `rolling_zscore` (safe because target is binary `is_fraud`)
 
-The feature was originally named `prophet_residual` because Facebook Prophet, a time series forecasting library, was initially considered for computing residuals as:
+This split prevents leakage while maximizing signal for each task.
 
-```
-residual = actual_amount - Prophet_forecasted_amount
-```
+### Leakage Fixes & Impact
 
-However, the simple rolling z-score was adopted instead for the following reasons:
+Three critical leakage issues were identified and corrected during development:
 
-| Reason | Explanation |
-|--------|-------------|
-| **Performance** | Prophet requires 5-10 seconds per customer. On 50,000+ customers, this equals 70-140 hours of compute time. |
-| **Overkill for the task** | Prophet is designed for long-term trend forecasting with seasonality. Only 7-transaction rolling statistics were required. |
-| **Same result, simpler code** | Rolling z-score achieves identical anomaly detection with 3 lines of pandas vs Prophet model fitting. |
-| **No external dependency** | Removing Prophet means one less package to install and maintain in production. |
+1. **Target Leakage:** `rolling_zscore` was initially used in spend models, inflating RMSE by 46% (98.5 to 144.28). Fixed by restricting it to fraud detection only.
+2. **Encoder Leakage:** LabelEncoders were fit on the full dataset. Fixed by fitting only on training data post-split.
+3. **Scaler Leakage:** StandardScaler was fit before splitting. Fixed by fitting only on training data.
 
-The feature was renamed to `rolling_zscore` to accurately reflect its computation method.
-
-### Why Different Features for Spend vs Fraud?
-
-| Task | Target | Safe Features | Why |
-|------|--------|---------------|-----|
-| **Spend** | amt (dollar amount) | rolling_mean, rolling_std | rolling_zscore contains amt, causing target leakage |
-| **Fraud** | is_fraud (0 or 1) | rolling_zscore | Target is binary, so z-score does not leak the answer |
-
-This split feature strategy maintains zero data leakage while maximizing predictive signal for each task.
-
----
-
-## Data Leakage Fixes
-
-During development, three critical leakage issues were identified and addressed:
-
-1. **Target Leakage in Spend Models:** The rolling_zscore feature (z-score) contained the target variable (amt) in its formula. This was addressed by using rolling_mean and rolling_std as separate features for spend models while retaining the z-score for fraud (where target is is_fraud, not amt).
-
-2. **Encoder Leakage:** LabelEncoders were initially fit on the full dataset. This was corrected by fitting only on training data after the train/val split.
-
-3. **Scaler Leakage:** StandardScaler was fit before splitting. This was corrected by fitting only on training data.
-
-### Impact of Leakage Fixes
-
-| Metric | With Leakage (Initial) | After Fix (Final) | Difference |
-|--------|-----------------------|-------------------|------------|
-| LightGBM Spend RMSE | 98.5 | 144.28 | +46% (worse but honest) |
-| LightGBM Fraud F1 | 0.78 | 0.80 | +2% (stable) |
-
-The fraud model was unaffected because rolling_zscore does not leak the fraud target. The spend model showed significant inflation before the fix because the model could reverse-engineer the amount from the z-score feature.
+**Result:** Fraud F1 remained stable (0.78 to 0.80) because `rolling_zscore` does not leak the binary fraud target. Spend RMSE corrected to honest values, confirming the importance of rigorous validation.
 
 ---
 
 ## Project Structure
+
+<details>
+<summary><strong>View Project Structure</strong></summary>
 
 ```
 Project 3/
@@ -391,6 +361,8 @@ Project 3/
 ├── studies/                 # SQLite databases for Optuna results
 └── README.md
 ```
+
+</details>
 
 ---
 
