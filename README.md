@@ -120,13 +120,13 @@ The noon dip likely reflects lunch-time micro-transactions, while late evening p
 
 ## Key Findings
 
-1. **LightGBM Defaults Are Production-Ready:** LightGBM baseline (144.27 RMSE) matched or slightly exceeded the optimized result (144.55 RMSE). This confirms that for structured tabular data, LightGBM defaults are robust and require minimal tuning.
+1. **LightGBM Defaults Performed Well on This Dataset:** For this credit card transaction data, LightGBM baseline (144.27 RMSE) matched or slightly exceeded the optimized result (144.55 RMSE). This suggests that for similar structured tabular financial data, LightGBM defaults may provide a strong starting point with minimal tuning required.
 
-2. **XGBoost Benefits from Hyperparameter Tuning:** XGBoost baseline (154.38 RMSE) improved 6.5% through Optuna optimization (144.26 RMSE), bringing it to parity with LightGBM. This demonstrates that while XGBoost is powerful, it may require more careful tuning to reach peak performance.
+2. **XGBoost Required Tuning to Reach Competitive Performance on This Dataset:** For this specific dataset, XGBoost baseline (154.38 RMSE) improved 6.5% through Optuna optimization (144.26 RMSE), bringing it to parity with LightGBM. This indicates that XGBoost may benefit from dataset-specific hyperparameter search, though results may vary across different data distributions.
 
-3. **Class Imbalance Handling Is Critical:** Fraud detection improved 158% through optimized scale_pos_weight (0.31 to 0.80 F1), demonstrating that addressing class imbalance is more impactful than tree hyperparameter tuning.
+3. **Class Imbalance Handling Is Critical for Fraud Detection:** Fraud detection improved 158% through optimized scale_pos_weight (0.31 to 0.80 F1), demonstrating that addressing class imbalance is more impactful than tree hyperparameter tuning for this task.
 
-4. **Architecture Matters More Than Tuning:** Deep learning models (MLP, LSTM) underperformed tree models by 1-25% regardless of tuning, confirming that gradient boosting is better suited for structured tabular data than neural networks.
+4. **Architecture Choice Matters More Than Hyperparameter Tuning for This Data:** Deep learning models (MLP, LSTM) underperformed tree models by 1-25% regardless of tuning on this tabular dataset, confirming that gradient boosting architectures are better suited for structured financial data than neural networks in this context.
 
 5. **Fraud and Spend Share Top Features, But Use Them Differently:** Both models identify merchant category and transaction hour as top predictors. However, spend models use these to predict expected amounts, while fraud models use them to detect deviations from individual user norms.
 
@@ -355,17 +355,17 @@ python -m analysis.shap_analysis
 
 ## Conclusion
 
-This project demonstrates that for financial tabular data:
+This project demonstrates that for this financial tabular dataset:
 
-1. **Start with LightGBM defaults** - They are often sufficient for production; tuning yielded no meaningful gain (144.27 to 144.55 RMSE)
+1. **LightGBM defaults provided strong baseline performance** - Tuning yielded no meaningful gain (144.27 to 144.55 RMSE), suggesting library defaults may suffice for similar structured transaction data
 
-2. **XGBoost may require tuning** - Default parameters underperformed by 6.5%; Optuna optimization brought it to parity with LightGBM
+2. **XGBoost benefited from dataset-specific tuning** - Default parameters underperformed by 6.5%; Optuna optimization brought it to parity with LightGBM, though this result may not generalize to other datasets
 
-3. **Prioritize class imbalance handling** for fraud detection tasks - The 158% F1 improvement came from scale_pos_weight optimization, not complex models
+3. **Class imbalance handling is essential for fraud detection** - The 158% F1 improvement came from scale_pos_weight optimization, not complex models
 
-4. **Avoid deep learning** unless massive data or specific sequential needs are present - MLP and LSTM underperformed trees by 1-25% regardless of tuning
+4. **Tree-based architectures outperformed neural networks on this tabular data** - MLP and LSTM underperformed trees by 1-25% regardless of tuning, consistent with broader findings on structured data
 
-5. **Audit for leakage early** - A single leaked feature can inflate results by 50% or more; rigorous validation is essential
+5. **Rigorous leakage auditing is non-negotiable** - A single leaked feature inflated spend RMSE by 46%; proper validation protocols are essential for trustworthy results
 
 **Answer to the core question:** Fraudulent transactions do mimic high-spending patterns in terms of category and timing. The distinguishing signature is not the transaction context itself, but whether that context represents a deviation from the individual user established behavior. This is why anomaly detection (rolling_zscore) outperforms raw amount prediction for fraud, while rolling baselines (rolling_mean) suffice for spend prediction.
 
